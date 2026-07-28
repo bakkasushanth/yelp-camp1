@@ -1,4 +1,12 @@
 if (process.env.NODE_ENV !== "production") {
+  require('dotenv').config();
+}
+console.log('Loaded DB_URL:', process.env.DB_URL); // <--- Add temporarily
+
+
+
+
+if (process.env.NODE_ENV !== "production") {
     require('dotenv').config();
 }
 
@@ -25,12 +33,8 @@ const reviewRoutes = require('./routes/reviews');
 const MongoStore = require("connect-mongo");
 const dbUrl = process.env.DB_URL ;
 
-mongoose.connect(dbUrl, {
-    useCreateIndex: true, 
-    useFindAndModify: false, 
-    useNewUrlParser: true, 
-    useUnifiedTopology: true 
-});
+mongoose.connect(dbUrl);
+
 
 const db = mongoose.connection;
 db.on("error", console.error.bind(console, "connection error:"));
@@ -50,17 +54,18 @@ app.use(express.static(path.join(__dirname, 'public')))
 app.use(mongoSanitize({
     replaceWith: '_'
 }))
-const secret ='thisshouldbeabettersecret!';
+const secret = process.env.SECRET || 'thisshouldbeabettersecret!';
 
-const store =  new MongoStore({
-    mongoUrl: dbUrl,
-    touchAfter: 24 * 60 * 60,
-        secret,
-    
+const store = MongoStore.create({
+    mongoUrl: dbUrl,                          
+    mongoOptions: { useUnifiedTopology: true }, 
+    crypto: { secret },                      
+    touchAfter: 24 * 60 * 60                 
 });
-store.on("error", function (e) {
-    console.log("SESSION STORE ERROR", e)
-})
+
+store.on('error', (e) => {
+    console.log('SESSION STORE ERROR', e);
+});
 
 const sessionConfig = {
     store,
@@ -70,11 +75,12 @@ const sessionConfig = {
     saveUninitialized: true,
     cookie: {
         httpOnly: true,
-        // secure: true,
+       
         expires: Date.now() + 1000 * 60 * 60 * 24 * 7,
         maxAge: 1000 * 60 * 60 * 24 * 7
     }
 }
+
 
 app.use(session(sessionConfig));
 app.use(flash());

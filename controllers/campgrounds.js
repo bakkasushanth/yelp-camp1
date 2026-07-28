@@ -5,8 +5,26 @@ const { cloudinary } = require("../cloudinary");
 
 
 module.exports.index = async (req, res) => {
-    const campgrounds = await Campground.find({}).populate('popupText');
-    res.render('campgrounds/index', { campgrounds })
+    const page = parseInt(req.query.page) || 1;
+    const limit = 20;
+    const skip = (page - 1) * limit;
+
+    const campgrounds = await Campground.find({})
+        .sort({ _id: -1 })
+        .skip(skip)
+        .limit(limit);
+
+    const allCampgrounds = await Campground.find({}, 'title description geometry');
+
+    const totalCampgrounds = await Campground.countDocuments({});
+    const totalPages = Math.ceil(totalCampgrounds / limit);
+
+    res.render('campgrounds/index', { 
+        campgrounds, 
+        allCampgrounds,
+        currentPage: page,
+        totalPages
+    });
 }
 
 module.exports.renderNewForm = (req, res) => {
@@ -59,10 +77,13 @@ campground.geometry = geoData.features[0].geometry;
     campground.images.push(...imgs);
     await campground.save();
     if (req.body.deleteImages) {
-        for (let filename of req.body.deleteImages) {
+        const validDeleteImages = req.body.deleteImages.filter(filename => 
+            campground.images.some(img => img.filename === filename)
+        );
+        for (let filename of validDeleteImages) {
             await cloudinary.uploader.destroy(filename);
         }
-        await campground.updateOne({ $pull: { images: { filename: { $in: req.body.deleteImages } } } })
+        await campground.updateOne({ $pull: { images: { filename: { $in: validDeleteImages } } } })
     }
     req.flash('success', 'Successfully updated campground!');
     res.redirect(`/campgrounds/${campground._id}`)
